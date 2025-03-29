@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../modules/home/views/home_view.dart';
 import '../modules/offline/views/offline_view.dart';
-import '../modules/sign_in/views/sign_in.dart';
+import '../modules/sign_in/views/signin_view.dart';
 import '../modules/splash/views/splash_view.dart';
 import 'routes.dart';
 
