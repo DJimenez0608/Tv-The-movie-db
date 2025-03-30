@@ -1,9 +1,15 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart';
 
 import '../../../domain/either.dart';
+
+part 'failure.dart';
+part 'logs.dart';
+part 'poarse_responseBody.dart';
 
 class Http {
   Http({
@@ -18,14 +24,17 @@ class Http {
   final String _apiKey;
   final Client _client;
 
-  Future<Either<HttpFailure, String>> request(
+  Future<Either<HttpFailure, R>> request<R>(
     String path, {
+    required R Function(dynamic responseBody) onSucces,
     HttpMethod method = HttpMethod.get,
     Map<String, String> headers = const {},
     Map<String, String> queryParameters = const {},
     Map<String, dynamic> body = const {},
     bool useApiKey = true,
   }) async {
+    Map<String, dynamic> logs = {};
+    StackTrace? stackTrace;
     try {
       if (useApiKey) {
         queryParameters = {
@@ -48,6 +57,11 @@ class Http {
       };
       late final Response response;
       final bodyString = jsonEncode(body);
+      logs = {
+        'url': url.toString(),
+        'method': method.name,
+        'body': body,
+      };
       switch (method) {
         case HttpMethod.get:
           response = await _client.get(url, headers: headers);
@@ -77,44 +91,57 @@ class Http {
           );
       }
       final statusCode = response.statusCode;
+      final responseBody = _parseResposeBody(response.body);
+
+      logs = {
+        ...logs,
+        'starTime': DateTime.now().toString(),
+        'statusCode': statusCode,
+        'responseBody': responseBody,
+      };
+
       if (statusCode >= 200 && statusCode < 300) {
-        return Either.right(response.body);
+        return Either.right(
+          onSucces(responseBody),
+        );
       }
       return Either.left(
         HttpFailure(
           statusCode: statusCode,
         ),
       );
-    } catch (e) {
+    } catch (e, s) {
+      stackTrace = s;
+      logs = {
+        ...logs,
+        'exception': e.runtimeType,
+      };
+
       if (e is SocketException || e is ClientException) {
+        logs = {
+          ...logs,
+          'exception': 'NetworrkException',
+        };
         return Either.left(
           HttpFailure(
             exception: NetWorkException(),
           ),
         );
       }
+
       return Either.left(
         HttpFailure(
           exception: e,
         ),
       );
+    } finally {
+      logs = {
+        ...logs,
+        'endTime': DateTime.now().toString(),
+      };
+      _printLogs(logs, stackTrace);
     }
   }
 }
 
-class HttpFailure {
-  HttpFailure({this.statusCode, this.exception});
-
-  final int? statusCode;
-  final Object? exception;
-}
-
-class NetWorkException {}
-
-enum HttpMethod {
-  get,
-  post,
-  patch,
-  delete,
-  put,
-}
+enum HttpMethod { get, post, patch, delete, put }

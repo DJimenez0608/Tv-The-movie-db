@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../../../../main.dart';
 import '../../../../domain/enums.dart';
+import '../../../../domain/repositories/authentication_repository.dart';
 import '../../../routes/routes.dart';
 
 class SignInView extends StatefulWidget {
@@ -102,7 +103,7 @@ class _SignInViewState extends State<SignInView> {
     setState(() {
       _fetching = true;
     });
-    final result = await Injector.of(context).authenticationRepository.sigIn(
+    final result = await context.read<AuthenticationRepository>().sigIn(
           _username,
           _password,
         );
