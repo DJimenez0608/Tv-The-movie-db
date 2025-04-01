@@ -1,28 +1,24 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
 import '../../../domain/either.dart';
 import '../../../domain/enums.dart';
-import '../../../domain/models/user.dart';
+import '../../../domain/models/user/user.dart';
 import '../../../domain/repositories/authentication_repository.dart';
+import '../local/session_service.dart';
+import '../remote/account_api.dart';
 import '../remote/autheticatio_api.dart';
-
-const _key = 'sessionId';
 
 class AuthenticationRepositoryImpl implements AuthenticationRepository {
   AuthenticationRepositoryImpl(
-    this._secureStorage,
     this._autheticatioApi,
+    this._sessionService,
+    this._accountApi,
   );
-  final FlutterSecureStorage _secureStorage;
   final AuthenticationApi _autheticatioApi;
-  @override
-  Future<User?> getUserData() {
-    return Future.value(User());
-  }
+  final SessionService _sessionService;
+  final AccountApi _accountApi;
 
   @override
   Future<bool> get isSignedIn async {
-    final sessionId = await _secureStorage.read(key: _key);
+    final sessionId = await _sessionService.sessionId;
     return sessionId != null;
   }
 
@@ -44,12 +40,28 @@ class AuthenticationRepositoryImpl implements AuthenticationRepository {
         );
 
         return loginResult.when(
-          (failure) {
+          (failure) async {
             return Either.left(failure);
           },
-          (newRequesToken) {
-            return Either.right(
-              User(),
+          (newRequesToken) async {
+            final sessionResult = await _autheticatioApi.createSession(
+              newRequesToken,
+            );
+            return sessionResult.when(
+              (failure) async => Either.left(failure),
+              (sessionId) async {
+                await _sessionService.saveSessionId(sessionId);
+
+                final user = await _accountApi.getAccount(sessionId);
+
+                if (user == null) {
+                  return Either.left(SigInFailure.unknown);
+                }
+
+                return Either.right(
+                  user,
+                );
+              },
             );
           },
         );
@@ -59,6 +71,6 @@ class AuthenticationRepositoryImpl implements AuthenticationRepository {
 
   @override
   Future<void> signOut() {
-    return _secureStorage.delete(key: _key);
+    return _sessionService.signOut();
   }
 }
